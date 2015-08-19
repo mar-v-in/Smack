@@ -16,41 +16,36 @@
  */
 package org.jivesoftware.smack.tcp;
 
-import de.measite.minidns.dane.DaneVerifier;
-import de.measite.minidns.dane.ExpectingTrustManager;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.ConnectionConfiguration;
 import org.jivesoftware.smack.ConnectionConfiguration.SecurityMode;
+import org.jivesoftware.smack.StanzaListener;
 import org.jivesoftware.smack.SmackConfiguration;
 import org.jivesoftware.smack.SmackException;
 import org.jivesoftware.smack.SmackException.AlreadyConnectedException;
 import org.jivesoftware.smack.SmackException.AlreadyLoggedInException;
-import org.jivesoftware.smack.SmackException.ConnectionException;
 import org.jivesoftware.smack.SmackException.NoResponseException;
 import org.jivesoftware.smack.SmackException.NotConnectedException;
+import org.jivesoftware.smack.SmackException.ConnectionException;
 import org.jivesoftware.smack.SmackException.SecurityRequiredByClientException;
 import org.jivesoftware.smack.SmackException.SecurityRequiredByServerException;
 import org.jivesoftware.smack.SmackException.SecurityRequiredException;
-import org.jivesoftware.smack.StanzaListener;
 import org.jivesoftware.smack.SynchronizationPoint;
+import org.jivesoftware.smack.XMPPException.StreamErrorException;
 import org.jivesoftware.smack.XMPPConnection;
 import org.jivesoftware.smack.XMPPException;
-import org.jivesoftware.smack.XMPPException.StreamErrorException;
 import org.jivesoftware.smack.XMPPException.XMPPErrorException;
-import org.jivesoftware.smack.compress.packet.Compress;
 import org.jivesoftware.smack.compress.packet.Compressed;
 import org.jivesoftware.smack.compression.XMPPInputOutputStream;
 import org.jivesoftware.smack.filter.StanzaFilter;
+import org.jivesoftware.smack.compress.packet.Compress;
 import org.jivesoftware.smack.packet.Element;
 import org.jivesoftware.smack.packet.IQ;
 import org.jivesoftware.smack.packet.Message;
-import org.jivesoftware.smack.packet.Nonza;
-import org.jivesoftware.smack.packet.Presence;
-import org.jivesoftware.smack.packet.Stanza;
-import org.jivesoftware.smack.packet.StartTls;
 import org.jivesoftware.smack.packet.StreamOpen;
-import org.jivesoftware.smack.packet.XMPPError;
-import org.jivesoftware.smack.proxy.ProxyInfo;
+import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smack.packet.Presence;
+import org.jivesoftware.smack.packet.StartTls;
 import org.jivesoftware.smack.sasl.packet.SaslStreamElements;
 import org.jivesoftware.smack.sasl.packet.SaslStreamElements.Challenge;
 import org.jivesoftware.smack.sasl.packet.SaslStreamElements.SASLFailure;
@@ -71,12 +66,17 @@ import org.jivesoftware.smack.sm.packet.StreamManagement.Resumed;
 import org.jivesoftware.smack.sm.packet.StreamManagement.StreamManagementFeature;
 import org.jivesoftware.smack.sm.predicates.Predicate;
 import org.jivesoftware.smack.sm.provider.ParseStreamManagement;
+import org.jivesoftware.smack.packet.Nonza;
+import org.jivesoftware.smack.packet.XMPPError;
+import org.jivesoftware.smack.proxy.ProxyInfo;
 import org.jivesoftware.smack.util.ArrayBlockingQueueWithShutdown;
 import org.jivesoftware.smack.util.Async;
+import org.jivesoftware.smack.util.DNSUtil;
 import org.jivesoftware.smack.util.PacketParserUtils;
 import org.jivesoftware.smack.util.StringUtils;
 import org.jivesoftware.smack.util.TLSUtils;
 import org.jivesoftware.smack.util.XmlStringBuilder;
+import org.jivesoftware.smack.util.dns.DaneProvider;
 import org.jivesoftware.smack.util.dns.HostAddress;
 import org.jxmpp.jid.impl.JidCreate;
 import org.jxmpp.jid.parts.Resourcepart;
@@ -91,9 +91,9 @@ import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
-import javax.net.ssl.TrustManager;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.PasswordCallback;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
@@ -706,11 +706,22 @@ public class XMPPTCPConnection extends AbstractXMPPConnection {
             }
         }
 
-        ExpectingTrustManager expectingTrustManager = new ExpectingTrustManager(null);
+        DaneProvider daneProvider = null;
+        if (config.isDaneEnabled()) {
+            daneProvider = DNSUtil.getDaneProvider();
+            if (daneProvider == null) {
+                throw new UnsupportedOperationException("Dane enabled but no DaneProvider available");
+            }
+            daneProvider = daneProvider.newInstance();
+        }
         // If the user didn't specify a SSLContext, use the default one
         if (context == null) {
             context = SSLContext.getInstance("TLS");
-            context.init(kms, new TrustManager[]{expectingTrustManager}, new java.security.SecureRandom());
+            if (config.isDaneEnabled()) {
+                daneProvider.init(context, kms, null, new java.security.SecureRandom());
+            } else {
+                context.init(kms, null, new java.security.SecureRandom());
+            }
         }
         Socket plain = socket;
         // Secure the plain connection
@@ -724,18 +735,9 @@ public class XMPPTCPConnection extends AbstractXMPPConnection {
 
         // Proceed to do the handshake
         sslSocket.startHandshake();
-        
-        boolean pkixRequired = true;
+
         if (config.isDaneEnabled()) {
-            pkixRequired = !new DaneVerifier().verify(sslSocket);
-        }
-        if (pkixRequired && expectingTrustManager.hasException()) {
-            try {
-                sslSocket.close();
-            } catch (IOException ignored) {
-                // We'll throw a better exception anyway.
-            }
-            throw expectingTrustManager.getException();
+            daneProvider.finish(sslSocket);
         }
 
         final HostnameVerifier verifier = getConfiguration().getHostnameVerifier();
