@@ -72,7 +72,8 @@ public class JavaxResolver implements SmackInitializer, DNSResolver {
     }
 
     @Override
-    public List<SRVRecord> lookupSRVRecords(String name) throws NamingException {
+    public List<SRVRecord> lookupSRVRecords(String name, boolean dnssec) throws NamingException {
+        if (dnssec) throw new UnsupportedOperationException("DNSSEC not supported.");
         List<SRVRecord> res = new ArrayList<SRVRecord>();
 
         Attributes dnsLookup = dirContext.getAttributes(name, new String[] { "SRV" });

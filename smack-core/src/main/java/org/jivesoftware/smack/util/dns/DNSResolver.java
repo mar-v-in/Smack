@@ -27,8 +27,8 @@ public interface DNSResolver {
     /**
      * Gets a list of service records for the specified service.
      * @param name The symbolic name of the service.
+     * @param dnssec Whether to use DNSSEC or not.
      * @return The list of SRV records mapped to the service name.
      */
-    List<SRVRecord> lookupSRVRecords(String name) throws Exception;
-
+    List<SRVRecord> lookupSRVRecords(String name, boolean dnssec) throws Exception;
 }

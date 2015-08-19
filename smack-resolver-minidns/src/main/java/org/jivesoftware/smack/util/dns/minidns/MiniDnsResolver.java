@@ -16,23 +16,23 @@
  */
 package org.jivesoftware.smack.util.dns.minidns;
 
-import java.util.LinkedList;
-import java.util.List;
-
+import de.measite.minidns.DNSCache;
+import de.measite.minidns.DNSClient;
+import de.measite.minidns.DNSMessage;
+import de.measite.minidns.Question;
+import de.measite.minidns.Record;
+import de.measite.minidns.Record.CLASS;
+import de.measite.minidns.Record.TYPE;
+import de.measite.minidns.dnssec.DNSSECClient;
+import de.measite.minidns.record.SRV;
 import org.jivesoftware.smack.initializer.SmackInitializer;
 import org.jivesoftware.smack.util.DNSUtil;
 import org.jivesoftware.smack.util.dns.DNSResolver;
 import org.jivesoftware.smack.util.dns.SRVRecord;
 import org.jxmpp.util.cache.ExpirationCache;
 
-import de.measite.minidns.Client;
-import de.measite.minidns.DNSCache;
-import de.measite.minidns.DNSMessage;
-import de.measite.minidns.Question;
-import de.measite.minidns.Record;
-import de.measite.minidns.Record.CLASS;
-import de.measite.minidns.Record.TYPE;
-import de.measite.minidns.record.SRV;
+import java.util.LinkedList;
+import java.util.List;
 
 
 /**
@@ -44,45 +44,41 @@ public class MiniDnsResolver implements SmackInitializer, DNSResolver {
     private static final long ONE_DAY = 24*60*60*1000;
     private static final MiniDnsResolver instance = new MiniDnsResolver();
     private static final ExpirationCache<Question, DNSMessage> cache = new ExpirationCache<Question, DNSMessage>(10, ONE_DAY);
-    private final Client client; 
+    private static final DNSCache dnsCache = new DNSCache() {
 
-    public MiniDnsResolver() {
-        client = new Client(new DNSCache() {
+        @Override
+        public DNSMessage get(Question question) {
+            return cache.get(question);
+        }
 
-            @Override
-            public DNSMessage get(Question question) {
-                return cache.get(question);
-            }
-
-            @Override
-            public void put(Question question, DNSMessage message) {
-                long expirationTime = ONE_DAY;
-                for (Record record : message.getAnswers()) {
-                    if (record.isAnswer(question)) {
-                        expirationTime = record.getTtl();
-                        break;
-                    }
+        @Override
+        public void put(Question question, DNSMessage message) {
+            long expirationTime = ONE_DAY;
+            for (Record record : message.getAnswers()) {
+                if (record.isAnswer(question)) {
+                    expirationTime = record.getTtl();
+                    break;
                 }
-                cache.put(question, message, expirationTime);
             }
+            cache.put(question, message, expirationTime);
+        }
 
-        });
-    }
+    };
 
     public static DNSResolver getInstance() {
         return instance;
     }
 
     @Override
-    public List<SRVRecord> lookupSRVRecords(String name) {
+    public List<SRVRecord> lookupSRVRecords(String name, boolean dnssec) {
         List<SRVRecord> res = new LinkedList<SRVRecord>();
-        DNSMessage message = client.query(name, TYPE.SRV, CLASS.IN);
+        DNSMessage message = (dnssec ? new DNSSECClient(dnsCache) : new DNSClient(dnsCache)).query(name, TYPE.SRV, CLASS.IN);
         if (message == null) {
             return res;
         }
         for (Record record : message.getAnswers()) {
             SRV srv = (SRV) record.getPayload();
-            res.add(new SRVRecord(srv.getName(), srv.getPort(), srv.getPriority(), srv.getWeight()));
+            res.add(new SRVRecord(srv.name, srv.port, srv.priority, srv.weight));
         }
         return res;
     }

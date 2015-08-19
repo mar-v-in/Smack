@@ -109,6 +109,10 @@ public abstract class ConnectionConfiguration {
 
     private final Set<String> enabledSaslMechanisms;
 
+    private final boolean dnssecEnabled;
+
+    private final boolean daneEnabled;
+
     protected ConnectionConfiguration(Builder<?,?> builder) {
         username = builder.username;
         password = builder.password;
@@ -140,6 +144,8 @@ public abstract class ConnectionConfiguration {
         debuggerEnabled = builder.debuggerEnabled;
         allowNullOrEmptyUsername = builder.allowEmptyOrNullUsername;
         enabledSaslMechanisms = builder.enabledSaslMechanisms;
+        dnssecEnabled = builder.dnssecEnabled;
+        daneEnabled = builder.daneEnabled;
 
         // If the enabledSaslmechanisms are set, then they must not be empty
         assert(enabledSaslMechanisms != null ? !enabledSaslMechanisms.isEmpty() : true);
@@ -401,6 +407,14 @@ public abstract class ConnectionConfiguration {
         return Collections.unmodifiableSet(enabledSaslMechanisms);
     }
 
+    public boolean isDnssecEnabled() {
+        return dnssecEnabled;
+    }
+
+    public boolean isDaneEnabled() {
+        return daneEnabled;
+    }
+
     /**
      * A builder for XMPP connection configurations.
      * <p>
@@ -440,6 +454,8 @@ public abstract class ConnectionConfiguration {
         private boolean allowEmptyOrNullUsername = false;
         private boolean saslMechanismsSealed;
         private Set<String> enabledSaslMechanisms;
+        private boolean dnssecEnabled;
+        private boolean daneEnabled;
 
         protected Builder() {
         }
@@ -771,7 +787,7 @@ public abstract class ConnectionConfiguration {
          */
         public B addEnabledSaslMechanism(String saslMechanism) {
             return addEnabledSaslMechanism(Arrays.asList(StringUtils.requireNotNullOrEmpty(saslMechanism,
-                            "saslMechanism must not be null or empty")));
+                    "saslMechanism must not be null or empty")));
         }
 
         /**
@@ -800,6 +816,16 @@ public abstract class ConnectionConfiguration {
                 enabledSaslMechanisms = new HashSet<>(saslMechanisms.size());
             }
             enabledSaslMechanisms.addAll(saslMechanisms);
+            return getThis();
+        }
+
+        public B setDnssecEnabled(boolean enabled) {
+            dnssecEnabled = enabled;
+            return getThis();
+        }
+
+        public B setDaneEnabled(boolean enabled) {
+            daneEnabled = enabled;
             return getThis();
         }
 
