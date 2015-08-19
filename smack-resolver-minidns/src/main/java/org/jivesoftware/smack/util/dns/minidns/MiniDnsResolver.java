@@ -16,6 +16,15 @@
  */
 package org.jivesoftware.smack.util.dns.minidns;
 
+import java.util.LinkedList;
+import java.util.List;
+
+import org.jivesoftware.smack.initializer.SmackInitializer;
+import org.jivesoftware.smack.util.DNSUtil;
+import org.jivesoftware.smack.util.dns.DNSResolver;
+import org.jivesoftware.smack.util.dns.SRVRecord;
+import org.jxmpp.util.cache.ExpirationCache;
+
 import de.measite.minidns.DNSCache;
 import de.measite.minidns.DNSClient;
 import de.measite.minidns.DNSMessage;
@@ -25,14 +34,6 @@ import de.measite.minidns.Record.CLASS;
 import de.measite.minidns.Record.TYPE;
 import de.measite.minidns.dnssec.DNSSECClient;
 import de.measite.minidns.record.SRV;
-import org.jivesoftware.smack.initializer.SmackInitializer;
-import org.jivesoftware.smack.util.DNSUtil;
-import org.jivesoftware.smack.util.dns.DNSResolver;
-import org.jivesoftware.smack.util.dns.SRVRecord;
-import org.jxmpp.util.cache.ExpirationCache;
-
-import java.util.LinkedList;
-import java.util.List;
 
 
 /**
